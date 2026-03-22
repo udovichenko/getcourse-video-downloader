@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Simple script to download videos from GetCourse.ru
 # on Linux/*BSD
-# Dependencies: bash, coreutils, curl
+# Dependencies: bash, coreutils, curl, grep
 
 set -eu
 set +f
@@ -47,7 +47,8 @@ curl -L --output "$main_playlist" "$URL"
 second_playlist="$(mktemp)"
 # Бывает (я встречал) 2 варианта видео
 # Может быть, можно проверять [[ "$URL" =~ .*".m3u8".* ]]
-if grep -qE '^https?:\/\/.*\.ts' "$main_playlist"
+# *.bin то же самое, что *.ts
+if grep -qE '^https?:\/\/.*\.(ts|bin)' "$main_playlist" 2>/dev/null
 then
 	# В плей-листе перечислены напрямую ссылки на фрагменты видео
 	# (если запустили проигрывание, зашли в инструменты разработчика Chromium -> Network,
@@ -57,8 +58,8 @@ else
 	# В плей-листе перечислены ссылки на плей-листы частей видео а разных разрешениях,
 	# последним идет самое большое разрешение, его и скачиваем
 	tail="$(tail -n1 "$main_playlist")"
-	if ! [[ "$tail" =~ ^"http"(s|)"://" ]]; then
-		echo "В содержимом заданной ссылки нет прямых ссылок на файлы *.ts (первый вариант),"
+	if ! [[ "$tail" =~ ^https?:// ]]; then
+		echo "В содержимом заданной ссылки нет прямых ссылок на файлы *.bin (*.ts) (первый вариант),"
 		echo "также последняя строка в ней не содержит ссылки на другой плей-лист (второй вариант)."
 		echo "Либо указана неправильная ссылка, либо GetCourse изменил алгоритмы."
 		echo "Если уверены, что дело в изменившихся алгоритмах GetCourse, опишите проблему здесь:"
@@ -72,7 +73,7 @@ c=0
 while read -r line
 do
 	if ! [[ "$line" =~ ^http ]]; then continue; fi
-	curl -L --output "${tmpdir}/$(printf '%05d' "$c").ts" "$line"
+	curl --retry 12 -L --output "${tmpdir}/$(printf '%05d' "$c").ts" "$line"
 	c=$((++c))
 done < "$second_playlist"
 
